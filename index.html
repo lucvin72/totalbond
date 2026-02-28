@@ -571,19 +571,14 @@ td.isin { color: var(--muted); font-size: 11px; letter-spacing: .5px; }
   </div>
 </header>
 
-<!-- LOADING SCREEN -->
+<!-- UPLOAD -->
 <div class="upload-zone" id="uploadZone">
-  <div class="upload-box" style="border-style:solid;cursor:default;">
-    <span class="upload-icon" id="uploadIcon">⏳</span>
-    <div class="upload-title" id="uploadTitle">Caricamento in corso...</div>
-    <div class="upload-sub" id="uploadSub">Connessione al database bond</div>
-    <div id="uploadProgress" style="margin-top:24px;height:3px;background:var(--border);border-radius:2px;overflow:hidden;">
-      <div id="uploadBar" style="height:100%;width:0%;background:#FFD700;transition:width .4s;border-radius:2px;"></div>
-    </div>
-    <div id="uploadFallback" style="display:none;margin-top:24px;">
-      <button class="upload-btn" onclick="document.getElementById('fileInput').click()">📂 Carica manualmente</button>
-      <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
-    </div>
+  <div class="upload-box" id="dropZone">
+    <span class="upload-icon">📊</span>
+    <div class="upload-title">Carica il database bond</div>
+    <div class="upload-sub">Trascina il file Excel qui<br>oppure tocca per selezionarlo</div>
+    <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Seleziona file Excel</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
   </div>
 </div>
 
@@ -722,7 +717,6 @@ window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('filtersPanel').classList.add('collapsed');
     filtersOpen = false;
   }
-  loadFromGDrive();
 });
 
 // ── filter toggle ──
@@ -732,52 +726,18 @@ function toggleFilters() {
   document.getElementById('filterToggle').style.borderColor = filtersOpen ? 'var(--accent)' : 'var(--border)';
 }
 
-// ── Google Drive auto-load ──
-const GDRIVE_FILE_ID = '1kmYNRV2GGkcXiNOy2rbumHx2PlX81ooQ';
-const GDRIVE_URL = `https://docs.google.com/spreadsheets/d/${GDRIVE_FILE_ID}/export?format=xlsx`;
+// ── file upload ──
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+document.getElementById('fileInput').addEventListener('change', e => { if(e.target.files[0]) processFile(e.target.files[0]); });
 
-async function loadFromGDrive() {
-  const bar = document.getElementById('uploadBar');
-  const sub = document.getElementById('uploadSub');
-  const icon = document.getElementById('uploadIcon');
-  const title = document.getElementById('uploadTitle');
-
-  let pct = 0;
-  const fakeProgress = setInterval(() => {
-    pct = Math.min(pct + Math.random() * 7, 88);
-    bar.style.width = pct + '%';
-  }, 200);
-
-  try {
-    sub.textContent = 'Connessione a Google Drive...';
-    const response = await fetch(GDRIVE_URL);
-    if(!response.ok) throw new Error('HTTP ' + response.status);
-    sub.textContent = 'Download completato, elaborazione dati...';
-    bar.style.width = '92%';
-    const arrayBuffer = await response.arrayBuffer();
-    clearInterval(fakeProgress);
-    bar.style.width = '100%';
-    processArrayBuffer(arrayBuffer);
-  } catch(err) {
-    clearInterval(fakeProgress);
-    console.error('GDrive load failed:', err);
-    icon.textContent = '⚠️';
-    title.textContent = 'Caricamento fallito';
-    sub.textContent = 'Impossibile raggiungere Google Drive. Carica il file manualmente.';
-    document.getElementById('uploadProgress').style.display = 'none';
-    document.getElementById('uploadFallback').style.display = 'block';
-    document.getElementById('fileInput').addEventListener('change', e => {
-      if(e.target.files[0]) {
-        const reader = new FileReader();
-        reader.onload = ev => processArrayBuffer(ev.target.result);
-        reader.readAsArrayBuffer(e.target.files[0]);
-      }
-    });
-  }
-}
-
-function processArrayBuffer(arrayBuffer) {
+function processFile(file) {
   document.getElementById('loader').style.display = 'flex';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const arrayBuffer = e.target.result;
   try {
       const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
       const ws = wb.Sheets['TOT'] || wb.Sheets[wb.SheetNames[0]];
@@ -862,7 +822,8 @@ function processArrayBuffer(arrayBuffer) {
       console.error(err);
     }
     document.getElementById('loader').style.display = 'none';
-  }
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 function findCol(headers, keyword) {
